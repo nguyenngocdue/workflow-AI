@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es2021",
+    "lib": ["dom", "es2021"],
+    "strict": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "rootDir": ".",
+    "outDir": ".core-build",
+    "skipLibCheck": true,
+    "declaration": false
+  },
+  "include": [
+    "src/core/**/*.ts",
+    "src/infrastructure/**/*.ts",
+    "src/examples/**/*.ts"
+  ]
+}
