@@ -121,9 +121,13 @@ export function convertUINodeToDBNode(
 }
 
 export function convertDBNodeToUINode(node: DBNode): UINode {
+  const uiConfig = node.uiConfig as { position?: { x: number; y: number }; type?: string } | null | undefined;
+  const position = uiConfig?.position ?? { x: 0, y: 0 };
+  const type = uiConfig?.type ?? "default";
   const uiNode: UINode = {
     id: node.id,
-    ...(node.uiConfig as any),
+    position,
+    type,
     data: {
       ...(node.nodeConfig as any),
       id: node.id,
@@ -131,7 +135,6 @@ export function convertDBNodeToUINode(node: DBNode): UINode {
       description: node.description || "",
       kind: node.kind as any,
     },
-    type: node.uiConfig.type || "default",
   };
   return uiNode;
 }
@@ -154,11 +157,14 @@ export function convertUIEdgeToDBEdge(
 }
 
 export function convertDBEdgeToUIEdge(edge: DBEdge): Edge {
+  const uiConfig = edge.uiConfig as { sourceHandle?: string; targetHandle?: string; label?: string } | null | undefined;
   return {
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    ...edge.uiConfig,
+    sourceHandle: uiConfig?.sourceHandle,
+    targetHandle: uiConfig?.targetHandle,
+    label: uiConfig?.label,
   };
 }
 

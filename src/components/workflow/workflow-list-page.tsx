@@ -3,7 +3,7 @@ import { EditWorkflowPopup } from "@/components/workflow/edit-workflow-popup";
 import { authClient } from "auth/client";
 import { canCreateWorkflow } from "lib/auth/client-permissions";
 
-import { ArrowUpRight, ChevronDown, MousePointer2 } from "lucide-react";
+import { ArrowUpRight, ChevronDown, MousePointer2, Upload } from "lucide-react";
 
 import { Card, CardDescription, CardHeader, CardTitle } from "ui/card";
 import { Button } from "ui/button";
@@ -31,7 +31,44 @@ import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "ui/dialog";
 import { WorkflowGreeting } from "@/components/workflow/workflow-greeting";
 import { notify } from "lib/notify";
-import { useState } from "react";
+import { useRef, useState } from "react";
+
+const WORKFLOW_FILE_VERSION = "1.0";
+
+const exportWorkflow = async (workflowId: string) => {
+  try {
+    const res = await fetch(`/api/workflow/${workflowId}/structure`);
+    if (!res.ok) throw new Error("Failed to fetch workflow");
+    const data = await res.json();
+
+    const { nodes, edges, ...workflowMeta } = data;
+    const exportData = {
+      version: WORKFLOW_FILE_VERSION,
+      exportedAt: new Date().toISOString(),
+      workflow: {
+        name: workflowMeta.name,
+        description: workflowMeta.description,
+        icon: workflowMeta.icon,
+        visibility: workflowMeta.visibility ?? "private",
+      },
+      nodes: nodes ?? [],
+      edges: edges ?? [],
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${workflowMeta.name?.replace(/\s+/g, "-") ?? "workflow"}.wflow.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported "${workflowMeta.name}"`);
+  } catch {
+    toast.error("Export failed");
+  }
+};
 
 const createWithExample = async (exampleWorkflow: {
   workflow: Partial<DBWorkflow>;
@@ -40,6 +77,7 @@ const createWithExample = async (exampleWorkflow: {
 }) => {
   const response = await fetch("/api/workflow", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...exampleWorkflow.workflow,
       noGenerateInputNode: true,
@@ -49,17 +87,19 @@ const createWithExample = async (exampleWorkflow: {
 
   if (!response.ok) return toast.error("Error creating workflow");
   const workflow = await response.json();
+
   const structureResponse = await fetch(
     `/api/workflow/${workflow.id}/structure`,
     {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nodes: exampleWorkflow.nodes,
         edges: exampleWorkflow.edges,
       }),
     },
   );
-  if (!structureResponse.ok) return toast.error("Error creating workflow");
+  if (!structureResponse.ok) return toast.error("Error saving workflow structure");
   return workflow.id as string;
 };
 
@@ -77,6 +117,8 @@ export default function WorkflowListPage({
   const [isVisibilityChangeLoading, setIsVisibilityChangeLoading] =
     useState(false);
   const [isDeleteLoading, setIsDeleteLoading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const { data: workflows, isLoading } = useSWR<WorkflowSummary[]>(
     "/api/workflow",
@@ -140,12 +182,54 @@ export default function WorkflowListPage({
 
       if (!response.ok) throw new Error("Failed to delete workflow");
 
-      mutate("/api/workflow");
+      // Optimistic: remove from list immediately so UI updates
+      mutate(
+        "/api/workflow",
+        (current: WorkflowSummary[] | undefined) =>
+          current?.filter((w) => w.id !== workflowId) ?? [],
+        { revalidate: true },
+      );
       toast.success(t("Workflow.deleted"));
     } catch (_error) {
       toast.error(t("Common.error"));
     } finally {
       setIsDeleteLoading(false);
+    }
+  };
+
+  const handleImportFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    try {
+      setIsImporting(true);
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      if (!data.workflow || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+        throw new Error("Invalid workflow file format");
+      }
+
+      const workflowId = await createWithExample({
+        workflow: data.workflow,
+        nodes: data.nodes,
+        edges: data.edges,
+      });
+
+      if (!workflowId) return;
+
+      mutate("/api/workflow");
+      toast.success(`Imported "${data.workflow.name}"`);
+      router.push(`/workflow/${workflowId}`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to import workflow",
+      );
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -174,6 +258,26 @@ export default function WorkflowListPage({
             <WorkflowGreeting />
           </DialogContent>
         </Dialog>
+
+        {canCreate && (
+          <>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,.wflow.json"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <Button
+              variant="outline"
+              onClick={() => importInputRef.current?.click()}
+              disabled={isImporting}
+            >
+              <Upload className="size-4" />
+              {isImporting ? "Importing..." : "Import"}
+            </Button>
+          </>
+        )}
 
         {canCreate && (
           <DropdownMenu>
@@ -214,7 +318,7 @@ export default function WorkflowListPage({
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 overscroll-y-auto">
             {canCreate && (
               <EditWorkflowPopup>
                 <Card className="relative bg-secondary overflow-hidden w-full hover:bg-input transition-colors h-[196px] cursor-pointer">
@@ -264,6 +368,7 @@ export default function WorkflowListPage({
                         ? deleteWorkflow
                         : undefined
                     }
+                    onExport={exportWorkflow}
                     isVisibilityChangeLoading={isVisibilityChangeLoading}
                     isDeleteLoading={isDeleteLoading}
                     isOwner={workflow.userId === currentUserId}
@@ -291,6 +396,7 @@ export default function WorkflowListPage({
                 item={workflow}
                 isOwner={false}
                 href={`/workflow/${workflow.id}`}
+                onExport={exportWorkflow}
               />
             ))}
           </div>

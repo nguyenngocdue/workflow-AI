@@ -8,6 +8,7 @@ import {
   BookmarkCheck,
   Trash2,
   Loader2,
+  Download,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -81,6 +82,7 @@ interface ShareableActionsProps {
   isBookmarkToggleLoading?: boolean;
   onDelete?: () => void;
   isDeleteLoading?: boolean;
+  onExport?: () => void;
   renderActions?: () => React.ReactNode;
   disabled?: boolean;
 }
@@ -95,6 +97,7 @@ export function ShareableActions({
   onVisibilityChange,
   onBookmarkToggle,
   onDelete,
+  onExport,
   renderActions,
   isVisibilityChangeLoading = false,
   isBookmarkToggleLoading = false,
@@ -245,6 +248,28 @@ export function ShareableActions({
             </Button>
           </TooltipTrigger>
           <TooltipContent>{t("Common.edit")}</TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* Export Action */}
+      {onExport && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 text-muted-foreground hover:text-foreground"
+              disabled={isAnyLoading || disabled}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onExport();
+              }}
+            >
+              <Download className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Export workflow</TooltipContent>
         </Tooltip>
       )}
 

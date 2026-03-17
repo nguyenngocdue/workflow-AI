@@ -22,9 +22,11 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { DBWorkflow } from "app-types/workflow";
+import { DBEdge, DBNode, DBWorkflow } from "app-types/workflow";
 import { extractWorkflowDiff } from "lib/ai/workflow/extract-workflow-diff";
 import {
+  convertDBEdgeToUIEdge,
+  convertDBNodeToUINode,
   convertUIEdgeToDBEdge,
   convertUINodeToDBNode,
 } from "lib/ai/workflow/shared.workflow";
@@ -50,9 +52,9 @@ const fitViewOptions = {
 
 interface WorkflowProps {
   workflowId: string;
-  initialNodes: UINode[];
+  initialNodes?: UINode[];
   hasEditAccess?: boolean;
-  initialEdges: Edge[];
+  initialEdges?: Edge[];
 }
 
 // Outer wrapper — provides ReactFlow context so useReactFlow() works inside
@@ -65,8 +67,8 @@ export default function Workflow(props: WorkflowProps) {
 }
 
 function WorkflowCanvas({
-  initialNodes,
-  initialEdges,
+  initialNodes = [],
+  initialEdges = [],
   workflowId,
   hasEditAccess,
 }: WorkflowProps) {
@@ -78,16 +80,53 @@ function WorkflowCanvas({
   // Canvas right-click → node search popup
   const [searchMenu, setSearchMenu] = useState<{ x: number; y: number; flowX: number; flowY: number } | null>(null);
 
+  // Track whether canvas was already initialized with real node data for this workflowId
+  const swrInitialized = useRef(initialNodes.length > 0);
+  const prevWorkflowId = useRef(workflowId);
+  if (prevWorkflowId.current !== workflowId) {
+    prevWorkflowId.current = workflowId;
+    swrInitialized.current = initialNodes.length > 0;
+  }
+
   const isProcessing = useMemo(
     () => processIds.length > 0,
     [processIds.length],
   );
-  const { data: workflow } = useSWR<DBWorkflow>(
+  const { data: workflow } = useSWR<DBWorkflow & { nodes?: DBNode[]; edges?: DBEdge[] }>(
     `/api/workflow/${workflowId}`,
     fetcher,
     {
-      onSuccess: (workflow) => {
-        init(workflow, hasEditAccess);
+      revalidateOnMount: true,
+      dedupingInterval: 0,
+      onSuccess: (data) => {
+        init(data, hasEditAccess);
+        // If SSR didn't provide nodes (empty initialNodes), initialize from SWR
+        if (!swrInitialized.current) {
+          const rawNodes = data.nodes ?? [];
+          const rawEdges = data.edges ?? [];
+          const uiNodes: UINode[] = [];
+          for (const n of rawNodes) {
+            try {
+              uiNodes.push(convertDBNodeToUINode(n as DBNode));
+            } catch {
+              // skip invalid node
+            }
+          }
+          const uiEdges = rawEdges.map((e) => convertDBEdgeToUIEdge(e as DBEdge));
+          const finalNodes =
+            uiNodes.length > 0
+              ? uiNodes
+              : [
+                  createUINode(NodeKind.Input, {
+                    position: { x: 0, y: 0 },
+                    name: "Input",
+                  }),
+                ];
+          setNodes(finalNodes);
+          setEdges(uiEdges);
+          snapshot.current = { nodes: finalNodes, edges: uiEdges };
+          swrInitialized.current = true;
+        }
       },
     },
   );

@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 
 import { UINode } from "lib/ai/workflow/workflow.interface";
 
-import { Loader, PlayIcon, AlignHorizontalSpaceAround } from "lucide-react";
+import { Loader, PlayIcon, AlignHorizontalSpaceAround, Download } from "lucide-react";
 import { Button } from "ui/button";
 
 import equal from "lib/equal";
@@ -248,6 +248,38 @@ export const WorkflowPanel = memo(
             isOwner={hasEditAccess || false}
             onVisibilityChange={hasEditAccess ? updateVisibility : undefined}
             isVisibilityChangeLoading={isSaving}
+            onExport={async () => {
+              try {
+                const res = await fetch(`/api/workflow/${workflow.id}/structure`);
+                if (!res.ok) throw new Error("Failed to fetch workflow");
+                const data = await res.json();
+                const { nodes, edges, ...meta } = data;
+                const exportData = {
+                  version: "1.0",
+                  exportedAt: new Date().toISOString(),
+                  workflow: {
+                    name: meta.name,
+                    description: meta.description,
+                    icon: meta.icon,
+                    visibility: meta.visibility ?? "private",
+                  },
+                  nodes: nodes ?? [],
+                  edges: edges ?? [],
+                };
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+                  type: "application/json",
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${meta.name?.replace(/\s+/g, "-") ?? "workflow"}.wflow.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                toast.success(`Exported "${meta.name}"`);
+              } catch {
+                toast.error("Export failed");
+              }
+            }}
           />
         </div>
         <div className="flex gap-2">
