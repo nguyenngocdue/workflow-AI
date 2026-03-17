@@ -1,8 +1,6 @@
 # Dependencies
 node_modules/
-.pnp
-.pnp.js
-.pnp.cjs
+.pnpm-store/
 
 # Next.js
 .next/
@@ -37,16 +35,7 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
-next-env.d.ts
+tsconfig.tsbuildinfo
 
-# Testing
-coverage/
-.vitest/
-playwright-report/
-test-results/
-
-# Misc
+# Vercel
 .vercel
-.turbo
-
-.next/
