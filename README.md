@@ -2,6 +2,8 @@
 
 A standalone **AI Workflow Designer** built with Next.js 16, shadcn/ui, and Vercel AI SDK. Design, configure, and execute multi-step AI workflows visually using a drag-and-drop canvas.
 
+![Workflow Design](public/images/work-flow-design.png)
+
 ---
 
 ## Features
