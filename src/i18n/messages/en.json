@@ -134,6 +134,7 @@
       "soonMessage": "Coming soon."
     },
     "example": {
+      "agentChat": "Agent Chat",
       "babyResearch": "Baby Research",
       "getWeather": "Get Weather"
     },

@@ -4,27 +4,21 @@ A standalone **AI Workflow Designer** built with Next.js 16, shadcn/ui, and Verc
 
 ---
 
-## Screenshots
-
-| Workflow List | Workflow Canvas |
-|:---:|:---:|
-| `/workflow` — manage your workflows | `/workflow/:id` — visual node editor |
-
----
-
 ## Features
 
 - **Visual workflow canvas** powered by `@xyflow/react` (ReactFlow)
-- **9 node types**: Input, Output, LLM, Condition, HTTP, Tool, Template, Code, Note
-- **Real-time autosave** — debounced diff-based persistence
-- **Variable mention system** — reference outputs from other nodes using `@mentions` (TipTap)
+- **9 node types** — Input, Output, LLM, Condition, HTTP, Tool, Template, Code, Note
+- **Right-click canvas** to search and add nodes instantly
+- **Real-time execution** — streaming events with live node status (running → success/fail)
+- **Vercel AI Gateway** — one key for all providers (OpenAI, Anthropic, Google, xAI, Meta…)
+- **Variable mention system** — reference outputs from other nodes using `@mentions`
 - **JSON Schema editor** — define typed output schemas per node
-- **Condition branching** — if / else-if / else logic with AND/OR operators
+- **Condition branching** — if / else logic with AND/OR operators
+- **Keyboard delete** — select node → Delete/Backspace
 - **Auto-layout** — BFS-based node arrangement
 - **Cycle detection** — prevents invalid circular connections
 - **Dark/light theme** — via `next-themes`
-- **i18n ready** — via `next-intl`
-- **Vercel AI SDK** integration-ready for LLM + Tool + HTTP execution
+- **Built-in templates** — Agent Chat, Get Weather, Baby Research pre-loaded
 
 ---
 
@@ -34,16 +28,13 @@ A standalone **AI Workflow Designer** built with Next.js 16, shadcn/ui, and Verc
 |-------|-----------|
 | Framework | Next.js 16.1 (App Router, Turbopack) |
 | UI Components | shadcn/ui (new-york style) |
-| Styling | Tailwind CSS v4 + tw-animate-css |
+| Styling | Tailwind CSS v4 |
 | Canvas | @xyflow/react (ReactFlow) |
 | AI SDK | Vercel AI SDK (`ai`, `@ai-sdk/openai`) |
-| State | Zustand (workflow store + app store) |
+| AI Gateway | Vercel AI Gateway (100+ models, 1 key) |
+| State | Zustand |
 | Data Fetching | SWR |
 | Rich Text | TipTap (mention + suggestion) |
-| Validation | Zod |
-| Animations | Framer Motion |
-| Icons | Lucide React |
-| Notifications | Sonner |
 
 ---
 
@@ -64,30 +55,211 @@ pnpm install
 
 ### Environment Variables
 
-Create a `.env.local` file:
+Create `.env.local`:
 
 ```bash
-# Required for LLM execution
+# Option A — Vercel AI Gateway (recommended: all providers with 1 key)
+# Get key at: https://vercel.com/ai-gateway
+AI_GATEWAY_API_KEY=your_gateway_key
+
+# Option B — Direct provider keys
 OPENAI_API_KEY=sk-...
-
-# Internal API URL (used by Server Components)
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+# ANTHROPIC_API_KEY=
+# GOOGLE_GENERATIVE_AI_API_KEY=
 ```
 
-### Run Development Server
+### Run
 
 ```bash
-pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) — redirects to `/workflow`.
-
-### Build for Production
-
-```bash
+pnpm dev        # http://localhost:6001
 pnpm build
 pnpm start
 ```
+
+---
+
+## Node Types
+
+### INPUT
+**Entry point of the workflow.** Defines the input schema — all fields declared here are available as `@mention` variables in downstream nodes.
+
+```json
+// Example output schema
+{ "question": "string", "language": "string" }
+```
+
+- Required: exactly 1 per workflow
+- Cannot be deleted (entry point protection)
+- All downstream nodes reference its fields via `@INPUT.fieldName`
+
+---
+
+### LLM (AI Agent)
+**Calls an AI language model.** Supports any model available through Vercel AI Gateway or direct provider keys.
+
+```
+Provider    Model examples
+────────    ─────────────────────────────────
+openai      gpt-4o, gpt-4o-mini, o3-mini, o1
+anthropic   claude-3-7-sonnet, claude-3-5-haiku
+google      gemini-2.0-flash, gemini-2.5-pro
+xai         grok-2, grok-3-mini
+meta        llama-3.3-70b, llama-4-scout
+```
+
+**Config:**
+- **System prompt** — set the AI's role/persona
+- **User message** — supports `@mention` to inject values from previous nodes
+- **Output schema** — define what fields the model should return (structured output)
+- **Model selector** — switch provider/model without changing the prompt
+
+**Execution:**
+1. Resolves all `@mention` placeholders to actual values
+2. Calls `generateText()` via Vercel AI Gateway
+3. Returns structured output matching the output schema
+
+---
+
+### CONDITION (If / Else)
+**Routes execution to different branches** based on conditions evaluated at runtime.
+
+```
+CONDITION node
+   ├── IF   branch → connects to one set of nodes
+   └── ELSE branch → connects to another set of nodes
+```
+
+**Operators available:**
+- `is_empty` / `is_not_empty`
+- `equals` / `not_equals`
+- `contains` / `not_contains`
+- `greater_than` / `less_than`
+
+**Config:**
+- Source: pick any field from any upstream node's output
+- Multiple conditions with AND / OR logical operators
+- Unlimited `else-if` branches
+
+---
+
+### OUTPUT
+**Exit point of the workflow.** Maps fields from upstream node outputs to the final result.
+
+```json
+// Example mapping
+{ "answer": "@AI_AGENT.answer", "language": "@INPUT.language" }
+```
+
+- Multiple OUTPUT nodes supported (e.g., one per condition branch)
+- Fields are merged into the final `WORKFLOW_END` result
+
+---
+
+### HTTP
+**Makes external API calls.** Supports GET, POST, PUT, PATCH, DELETE.
+
+**Config:**
+- URL, method, headers, query params, body
+- All values support `@mention` — inject dynamic data from upstream nodes
+- Timeout configurable
+- Output schema: `{ response: { status, ok, body, headers, duration } }`
+
+---
+
+### TOOL
+**Runs an AI tool / function call.** Uses the model's native function-calling capability to invoke registered tools (MCP tools or app tools).
+
+**Config:**
+- Select tool from registered list
+- Provide message context (supports `@mention`)
+- Model selector (tool-calling capable models only)
+
+---
+
+### TEMPLATE
+**Generates text with variable interpolation.** Useful for building dynamic prompts, emails, reports, or any formatted text before passing to an LLM.
+
+```
+Hello {{@INPUT.name}}, your order {{@HTTP.response.body.orderId}} is ready.
+```
+
+---
+
+### CODE *(coming soon)*
+**Executes a JavaScript/Python code block** with access to upstream node outputs as variables.
+
+---
+
+### NOTE
+**Sticky note / annotation.** Rendered as Markdown on the canvas. Not executed. Use for documenting workflow logic or leaving instructions.
+
+---
+
+## Execution Flow
+
+```
+User fills INPUT fields in Execute Tab
+        ↓
+allNodeValidate()   — check for missing configs
+        ↓
+POST /api/workflow/:id/execute  { query: { ... } }
+        ↓
+Server:
+  1. Load nodes + edges from store
+  2. topoSort() → determine execution order
+  3. Open ReadableStream
+
+  For each node (in order):
+  ┌─────────────────────────────────────────┐
+  │ emit NODE_START                         │
+  │                                         │
+  │ INPUT    → pass query as output         │
+  │ LLM      → resolve @mentions            │
+  │             → call AI Gateway           │
+  │             → return { answer: ... }    │
+  │ CONDITION→ evaluate conditions          │
+  │             → set branch = "if"/"else"  │
+  │ OUTPUT   → collect upstream values      │
+  │ HTTP     → fetch external API           │
+  │ TEMPLATE → interpolate variables        │
+  │                                         │
+  │ emit NODE_END (isOk: true/false)        │
+  └─────────────────────────────────────────┘
+
+  emit WORKFLOW_END  { output, histories }
+
+Client (real-time):
+  NODE_START → node turns blue (spinner)
+  NODE_END   → node turns green ✓ or red ✗
+  WORKFLOW_END → Result tab shows final output
+```
+
+---
+
+## Canvas Shortcuts
+
+| Action | How |
+|--------|-----|
+| Add node | Right-click canvas → search |
+| Delete node | Select → `Delete` or `Backspace` |
+| Delete node (menu) | Right-click node → Delete |
+| Connect nodes | Drag from `+` handle on right side |
+| Select multiple | Click + drag selection box |
+| Pan | Click + drag on empty canvas |
+| Zoom | Scroll wheel |
+| Fit view | `Ctrl+Shift+H` |
+
+---
+
+## Built-in Templates
+
+| Template | Flow |
+|----------|------|
+| 🤖 **Agent Chat** | INPUT → LLM → CONDITION → 2× OUTPUT |
+| 🌤️ **Get Weather** | INPUT → LLM (geocode) → HTTP (weather API) → OUTPUT |
+| 👨🏻‍🔬 **Baby Research** | INPUT → multi-step search + analysis → OUTPUT |
+
+Templates are pre-seeded on server start — available immediately at `/workflow`.
 
 ---
 
@@ -96,41 +268,36 @@ pnpm start
 ```
 src/
 ├── app/
-│   ├── (workflow)/
-│   │   ├── workflow/page.tsx          # Workflow list
-│   │   └── workflow/[id]/page.tsx     # Canvas editor
-│   ├── api/workflow/                  # CRUD + structure + execute routes
-│   ├── store/
-│   │   ├── index.ts                   # appStore — chatModel (persisted)
-│   │   └── workflow.store.ts          # useWorkflowStore — current workflow
-│   └── globals.css
+│   ├── (workflow)/workflow/
+│   │   ├── page.tsx                   # Workflow list
+│   │   └── [id]/page.tsx              # Canvas editor
+│   ├── api/workflow/
+│   │   ├── route.ts                   # GET list / POST create
+│   │   └── [id]/
+│   │       ├── route.ts               # GET / PUT / DELETE
+│   │       ├── structure/route.ts     # GET + POST (delta save)
+│   │       └── execute/route.ts       # POST → streaming execution
+│   └── store/
+│       ├── index.ts                   # appStore (chatModel)
+│       └── workflow.store.ts          # useWorkflowStore
 │
 ├── components/workflow/
-│   ├── workflow.tsx                   # Root ReactFlow canvas
-│   ├── workflow-panel.tsx             # Toolbar (save/run/publish/arrange)
-│   ├── workflow-list-page.tsx         # /workflow list page
-│   ├── default-node.tsx              # Universal node renderer
-│   ├── selected-node-config-tab.tsx   # Right-side config panel
-│   ├── execute-tab.tsx                # Test run panel
-│   └── node-config/                   # Per-kind config UIs
-│       ├── input-node-config.tsx
-│       ├── llm-node-config.tsx
-│       ├── condition-node-config.tsx
-│       ├── http-node-config.tsx
-│       ├── tool-node-config.tsx
-│       └── template-node-config.tsx
+│   ├── workflow.tsx                   # ReactFlow canvas + right-click search
+│   ├── canvas-node-search.tsx         # Right-click node picker (portal)
+│   ├── default-node.tsx               # Universal node renderer
+│   ├── node-context-menu-content.tsx  # Right-click node menu (delete)
+│   └── node-config/                   # Per-kind config panels
 │
-├── lib/ai/workflow/
-│   ├── workflow.interface.ts          # NodeKind, UINode, all types
-│   ├── shared.workflow.ts             # DB↔UI converters, stream encoding
-│   ├── create-ui-node.ts              # Node factory
-│   ├── node-validate.ts               # Pre-run validation
-│   ├── condition.ts                   # Condition operators + evaluator
-│   ├── arrange-nodes.ts               # Auto-layout algorithm
-│   └── executor/                      # Execution engine
-│       ├── graph-store.ts             # Runtime I/O state
-│       ├── node-executor.ts           # Per-kind executors
-│       └── workflow-executor.ts       # DAG traversal
+├── lib/
+│   ├── ai/
+│   │   ├── models.ts                  # customModelProvider + AI Gateway
+│   │   └── workflow/
+│   │       ├── workflow.interface.ts  # All TypeScript types
+│   │       ├── shared.workflow.ts     # Converters + stream helpers
+│   │       ├── examples/              # Built-in templates
+│   │       └── executor/              # DAG execution engine
+│   └── mock/
+│       └── store.ts                   # In-memory store (seeded from templates)
 │
 └── types/
     ├── workflow.ts                    # DBWorkflow, DBNode, DBEdge
@@ -139,94 +306,13 @@ src/
 
 ---
 
-## Node Types
+## Mock Services
 
-| Node | Icon | Description |
-|------|------|-------------|
-| **Input** | `→` | Workflow entry point — defines input schema |
-| **Output** | `←` | Collects and maps results from other nodes |
-| **LLM** | `✦` | Calls an AI model (GPT-4o, etc.) with configurable messages |
-| **Condition** | `?` | Branches flow with if / else-if / else logic |
-| **HTTP** | `🌐` | Makes external API calls (GET, POST, PUT, DELETE…) |
-| **Tool** | `🔧` | Runs an AI tool call (function calling) |
-| **Template** | `📄` | Generates text using variable interpolation |
-| **Note** | `📝` | Sticky note / comment (no execution) |
-| **Code** | `</>` | Code execution *(coming soon)* |
+Runs fully in-memory — no database required.
 
----
-
-## Architecture
-
-### Save Flow
-
-```
-User edits node/edge
-  → debounce (200ms on add/delete, 10s on move)
-  → extractWorkflowDiff() — compute minimal diff
-  → POST /api/workflow/:id/structure
-    { nodes: DBNode[], edges: DBEdge[], deleteNodes: [], deleteEdges: [] }
-```
-
-### Execution Flow
-
-```
-ExecuteTab → POST /api/workflow/:id/execute
-  → ReadableStream of "WF_EVENT:{json}\n" lines
-  → WORKFLOW_START | NODE_START | NODE_END | WORKFLOW_END
-  → UI updates node colors: grey → spinner → green/red
-```
-
-### Path Aliases
-
-```json
-"@/*"          → "src/*"
-"lib/*"        → "src/lib/*"
-"app-types/*"  → "src/types/*"
-"ui/*"         → "src/components/ui/*"
-"auth/*"       → "src/lib/auth/*"
-```
-
----
-
-## Implementing Execution (Vercel AI SDK)
-
-The `/api/workflow/[id]/execute` route is **not yet implemented**. To enable real execution:
-
-```typescript
-// src/app/api/workflow/[id]/execute/route.ts
-import { generateText } from 'ai';
-import { openai } from '@ai-sdk/openai';
-import { encodeWorkflowEvent } from 'lib/ai/workflow/shared.workflow';
-
-export async function POST(req: Request, { params }) {
-  const { id } = await params;
-  const { query } = await req.json();
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (e) => controller.enqueue(encoder.encode(encodeWorkflowEvent(e)));
-
-      send({ type: 'WORKFLOW_START', workflowId: id, timestamp: Date.now() });
-      // ... walk DAG, execute nodes, emit events ...
-      send({ type: 'WORKFLOW_END', workflowId: id, result: {}, timestamp: Date.now() });
-      controller.close();
-    }
-  });
-
-  return new Response(stream, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-  });
-}
-
-## Mock / Stub Services
-
-This project runs fully in-memory for development. The following are stubbed:
-
-| Service | Stub location | Notes |
-|---------|--------------|-------|
+| Service | Location | Notes |
+|---------|----------|-------|
+| Workflows | `src/lib/mock/store.ts` | In-memory, seeded with templates on start |
 | Auth | `src/lib/auth/client.ts` | Always returns mock user |
-| Database | `src/app/api/workflow/route.ts` | In-memory array |
-| Workflow execution | `src/lib/ai/workflow/executor/` | Throws "not available" |
+| Models list | `src/app/api/chat/models/route.ts` | Static list, `hasAPIKey` from env vars |
 | MCP tools | `src/hooks/queries/use-mcp-list.ts` | Returns `[]` |
-

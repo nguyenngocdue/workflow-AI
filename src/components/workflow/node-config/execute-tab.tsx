@@ -226,6 +226,7 @@ ${workflow!.description ? `tool-description: ${workflow!.description}` : ""}`,
           signal: abortController.signal,
         });
 
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -334,15 +335,31 @@ ${workflow!.description ? `tool-description: ${workflow!.description}` : ""}`,
   );
 
   const lastOutput = useMemo(() => {
+    // Try Output nodes first
     const outputNodes = histories
       .filter((h) => h.kind == NodeKind.Output)
       .map((h) => h.result?.output)
       .filter(Boolean);
 
-    if (outputNodes.length == 0) return undefined;
-    if (outputNodes.length == 1) return outputNodes[0];
-    return outputNodes;
-  }, [histories]);
+    if (outputNodes.length > 0) {
+      if (outputNodes.length == 1) return outputNodes[0];
+      return outputNodes;
+    }
+
+    // Fallback: use result from WORKFLOW_END event
+    if (result?.output && Object.keys(result.output).length > 0) {
+      return result.output;
+    }
+
+    // Last fallback: last LLM node output
+    const llmNodes = histories
+      .filter((h) => h.kind == NodeKind.LLM)
+      .map((h) => h.result?.output)
+      .filter(Boolean);
+    if (llmNodes.length > 0) return llmNodes.at(-1);
+
+    return undefined;
+  }, [histories, result]);
 
   const resultView = useMemo(() => {
     if (isRunning) return;
@@ -432,9 +449,9 @@ ${workflow!.description ? `tool-description: ${workflow!.description}` : ""}`,
                         id={key || String(i)}
                         type="number"
                         placeholder={schema.description || "number"}
-                        defaultValue={query[key] || undefined}
+                        value={query[key] ?? ""}
                         onChange={(e) =>
-                          setQuery({ ...query, [key]: Number(e.target.value) })
+                          setQuery({ [key]: Number(e.target.value) })
                         }
                       />
                     ) : schema.type == "boolean" ? (
@@ -474,11 +491,11 @@ ${workflow!.description ? `tool-description: ${workflow!.description}` : ""}`,
                       <Textarea
                         disabled={isProcessing}
                         id={key || String(i)}
-                        value={query[key]}
+                        value={query[key] ?? ""}
                         className="resize-none max-h-28 overflow-y-auto"
-                        placeholder={schema.description || "string"}
+                        placeholder={schema.description || "Nhập giá trị..."}
                         onChange={(e) =>
-                          setQuery({ ...query, [key]: e.target.value })
+                          setQuery({ [key]: e.target.value })
                         }
                       />
                     ) : null}
@@ -571,7 +588,7 @@ ${workflow!.description ? `tool-description: ${workflow!.description}` : ""}`,
                     endedAt: result.endedAt,
                     error: errorToString(result.error),
                     result: {
-                      input: histories[0].result?.output ?? {},
+                      input: histories[0]?.result?.output ?? {},
                       output: histories.at(-1)?.result?.output ?? {},
                     },
                   }}

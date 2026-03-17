@@ -1,12 +1,13 @@
+import { objectFlow, toAny } from "lib/utils";
 import { OutputSchemaSourceKey } from "../workflow.interface";
+import { graphStore } from "ts-edge";
 import { DBEdge, DBNode } from "app-types/workflow";
+import { ObjectJsonSchema7 } from "app-types/util";
+import { defaultObjectJsonSchema } from "../shared.workflow";
 
 export interface WorkflowRuntimeState {
   query: Record<string, unknown>;
   inputs: {
-    [nodeId: string]: any;
-  };
-  nodeOutputs?: {
     [nodeId: string]: any;
   };
   nodes: DBNode[];
@@ -23,35 +24,55 @@ export interface WorkflowRuntimeState {
 export const createGraphStore = (params: {
   nodes: DBNode[];
   edges: DBEdge[];
-}): WorkflowRuntimeState => {
-  const state: WorkflowRuntimeState = {
-    query: {},
-    outputs: {},
-    inputs: {},
-    nodes: params.nodes,
-    edges: params.edges,
-    setInput(nodeId, value) {
-      state.inputs[nodeId] = value;
-    },
-    getInput(nodeId) {
-      return state.inputs[nodeId];
-    },
-    setOutput(key, value) {
-      if (!state.outputs[key.nodeId]) state.outputs[key.nodeId] = {};
-      let obj = state.outputs[key.nodeId];
-      for (let i = 0; i < key.path.length - 1; i++) {
-        if (!obj[key.path[i]]) obj[key.path[i]] = {};
-        obj = obj[key.path[i]];
-      }
-      obj[key.path[key.path.length - 1]] = value;
-    },
-    getOutput<T>(key: OutputSchemaSourceKey): undefined | T {
-      let result: any = state.outputs[key.nodeId];
-      for (const p of key.path) {
-        result = result?.[p];
-      }
-      return result as T;
-    },
-  };
-  return state;
+}) => {
+  return graphStore<WorkflowRuntimeState>((set, get) => {
+    return {
+      query: {},
+      outputs: {},
+      inputs: {},
+      nodes: params.nodes,
+      edges: params.edges,
+      setInput(nodeId, value) {
+        set((prev) => {
+          return { inputs: { ...prev.inputs, [nodeId]: value } };
+        });
+      },
+      getInput(nodeId) {
+        const { inputs } = get();
+        return inputs[nodeId];
+      },
+      setOutput(key, value) {
+        set((prev) => {
+          const next = objectFlow(prev.outputs).setByPath(
+            [key.nodeId, ...key.path],
+            value,
+          );
+          return {
+            outputs: next,
+          };
+        });
+      },
+      getOutput(key) {
+        const { outputs, nodes } = get();
+        const targetNode = nodes.find((n) => n.id == key.nodeId);
+        const schema =
+          (targetNode?.nodeConfig?.outputSchema as ObjectJsonSchema7) ??
+          defaultObjectJsonSchema;
+        const defaultValue = key.path.length
+          ? key.path.reduce(
+              (acc, cur, index) => {
+                const isLast = index === key.path.length - 1;
+                if (isLast) return acc?.[cur]?.default;
+                return acc?.[cur]?.properties?.[cur];
+              },
+              (schema.properties ?? {}) as any,
+            )
+          : toAny(schema)?.default;
+
+        return (
+          objectFlow(outputs[key.nodeId]).getByPath(key.path) ?? defaultValue
+        );
+      },
+    };
+  });
 };

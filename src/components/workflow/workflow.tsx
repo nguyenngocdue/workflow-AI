@@ -5,6 +5,7 @@ import { DefaultNode } from "@/components/workflow/default-node";
 import { WorkflowPanel } from "@/components/workflow/workflow-panel";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Panel,
   Edge,
@@ -18,6 +19,7 @@ import {
   NodeMouseHandler,
   IsValidConnection,
   Connection,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { DBWorkflow } from "app-types/workflow";
@@ -32,6 +34,8 @@ import { createDebounce, fetcher, generateUUID } from "lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { safe } from "ts-safe";
+import { CanvasNodeSearch } from "./canvas-node-search";
+import { createUINode } from "lib/ai/workflow/create-ui-node";
 
 const nodeTypes = {
   default: DefaultNode,
@@ -44,20 +48,35 @@ const fitViewOptions = {
   padding: 1,
 };
 
-export default function Workflow({
-  initialNodes,
-  initialEdges,
-  workflowId,
-  hasEditAccess,
-}: {
+interface WorkflowProps {
   workflowId: string;
   initialNodes: UINode[];
   hasEditAccess?: boolean;
   initialEdges: Edge[];
-}) {
+}
+
+// Outer wrapper — provides ReactFlow context so useReactFlow() works inside
+export default function Workflow(props: WorkflowProps) {
+  return (
+    <ReactFlowProvider>
+      <WorkflowCanvas {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function WorkflowCanvas({
+  initialNodes,
+  initialEdges,
+  workflowId,
+  hasEditAccess,
+}: WorkflowProps) {
   const { init, addProcess, processIds } = useWorkflowStore();
+  const { screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes] = useState<UINode[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
+
+  // Canvas right-click → node search popup
+  const [searchMenu, setSearchMenu] = useState<{ x: number; y: number; flowX: number; flowY: number } | null>(null);
 
   const isProcessing = useMemo(
     () => processIds.length > 0,
@@ -79,6 +98,32 @@ export default function Workflow({
   const editable = useMemo(() => {
     return !isProcessing && hasEditAccess && !workflow?.isPublished;
   }, [isProcessing, hasEditAccess, workflow?.isPublished]);
+
+  const onPaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      event.preventDefault();
+      if (!hasEditAccess) return;
+      const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      setSearchMenu({ x: event.clientX, y: event.clientY, flowX: flowPos.x, flowY: flowPos.y });
+    },
+    [hasEditAccess, screenToFlowPosition],
+  );
+
+  const handleNodeSearchSelect = useCallback(
+    (kind: NodeKind) => {
+      if (!searchMenu) return;
+      const names = nodes.map((n) => n.data.name as string);
+      const count = names.filter((n) => n.startsWith(kind.toUpperCase())).length;
+      const name = count > 0 ? `${kind.toUpperCase()}_${count + 1}` : kind.toUpperCase();
+      const newNode = createUINode(kind, {
+        position: { x: searchMenu.flowX, y: searchMenu.flowY },
+        name,
+      });
+      setNodes((nds) => [...nds, newNode]);
+      setSearchMenu(null);
+    },
+    [searchMenu, nodes],
+  );
 
   const save = async () => {
     if (workflow?.isPublished) return;
@@ -145,7 +190,7 @@ export default function Workflow({
       }
       setNodes((nds) => applyNodeChanges(changes, nds) as UINode[]);
     },
-    [editable],
+    [editable, nodes],
   );
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
@@ -278,7 +323,7 @@ export default function Workflow({
     <div className="w-full h-full relative text-de text-gree-4">
       <ReactFlow
         fitView
-        deleteKeyCode={null}
+        deleteKeyCode={editable ? ["Delete", "Backspace"] : null}
         nodes={nodes}
         maxZoom={1.4}
         minZoom={0.1}
@@ -293,6 +338,7 @@ export default function Workflow({
         onConnect={onConnect}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
+        onPaneContextMenu={onPaneContextMenu}
         fitViewOptions={fitViewOptions}
       >
         <Background gap={12} size={0.6} />
@@ -318,6 +364,12 @@ export default function Workflow({
           <div className="z-10 absolute right-0 bottom-0 w-1/12 h-full bg-linear-to-l from-background to-transparent  pointer-events-none" />
         </Panel>
       </ReactFlow>
+
+      <CanvasNodeSearch
+        position={searchMenu}
+        onSelect={handleNodeSearchSelect}
+        onClose={() => setSearchMenu(null)}
+      />
     </div>
   );
 }

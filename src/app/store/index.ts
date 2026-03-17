@@ -14,7 +14,7 @@ export interface AppDispatch {
 }
 
 const initialState: AppState = {
-  chatModel: { provider: "openai", model: "gpt-4o" },
+  chatModel: { provider: "anthropic", model: "claude-sonnet-4-5" },
   openShortcutsPopup: false,
   openChatPreferences: false,
   openUserSettings: false,

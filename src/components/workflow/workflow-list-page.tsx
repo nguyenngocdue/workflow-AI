@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "ui/dropdown-menu";
-import { BabyResearch, GetWeather } from "lib/ai/workflow/examples";
+import { AgentChat, BabyResearch, GetWeather } from "lib/ai/workflow/examples";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "ui/dialog";
@@ -187,7 +187,10 @@ export default function WorkflowListPage({
                 <ChevronDown className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-54">
+              <DropdownMenuContent className="w-54">
+              <DropdownMenuItem onClick={() => createExample(AgentChat())}>
+                🤖 {t("Workflow.example.agentChat")}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => createExample(BabyResearch())}>
                 👨🏻‍🔬 {t("Workflow.example.babyResearch")}
               </DropdownMenuItem>

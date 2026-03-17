@@ -20,10 +20,16 @@ export const useChatModels = (options?: SWRConfiguration) => {
     fallbackData: [],
     onSuccess: (data) => {
       const status = appStore.getState();
-      if (!status.chatModel) {
-        const firstProvider = data[0].provider;
-        const model = data[0].models[0].name;
-        appStore.setState({ chatModel: { provider: firstProvider, model } });
+      if (!status.chatModel && data?.[0]?.models?.[0]) {
+        const anthropicProvider = data.find((p) => p.provider === "anthropic");
+        const defaultModel = anthropicProvider?.models.find((m) =>
+          m.name.includes("claude-sonnet-4"),
+        );
+        appStore.setState({
+          chatModel: defaultModel
+            ? { provider: "anthropic", model: defaultModel.name }
+            : { provider: data[0].provider, model: data[0].models[0].name },
+        });
       }
     },
     ...options,

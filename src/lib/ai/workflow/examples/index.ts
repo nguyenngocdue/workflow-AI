@@ -1,5 +1,6 @@
 import { DBEdge, DBNode, DBWorkflow } from "app-types/workflow";
 import { generateUUID } from "lib/utils";
+import { agentChatEdges, agentChatNodes } from "./agent-chat";
 import { babyResearchEdges, babyResearchNodes } from "./baby-research";
 import { getWeatherEdges, getWeatherNodes } from "./get-weather";
 
@@ -25,6 +26,35 @@ export const GetWeather = (): {
     },
     nodes: getWeatherNodes,
     edges: getWeatherEdges.map((edge) => ({
+      ...edge,
+      id: generateUUID(),
+    })),
+  };
+};
+
+export const AgentChat = (): {
+  workflow: Partial<DBWorkflow>;
+  nodes: Partial<DBNode>[];
+  edges: Partial<DBEdge>[];
+} => {
+  return {
+    workflow: {
+      description:
+        "A simple conversational AI workflow: user inputs a question, an LLM processes it, and the answer is returned.",
+      name: "Agent Chat",
+      isPublished: true,
+      visibility: "private",
+      icon: {
+        type: "emoji",
+        value:
+          "https://cdn.jsdelivr.net/npm/emoji-datasource-apple/img/apple/64/1f916.png",
+        style: {
+          backgroundColor: "oklch(20.5% 0 0)",
+        },
+      },
+    },
+    nodes: agentChatNodes,
+    edges: agentChatEdges.map((edge) => ({
       ...edge,
       id: generateUUID(),
     })),

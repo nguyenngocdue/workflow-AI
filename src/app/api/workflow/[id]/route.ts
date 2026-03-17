@@ -1,34 +1,29 @@
 import { NextResponse } from "next/server";
+import { workflowStore, structureStore } from "lib/mock/store";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return NextResponse.json({
-    id,
-    name: "Demo Workflow",
-    description: "A sample workflow",
-    icon: { type: "emoji", value: "⚡" },
-    visibility: "private",
-    isPublished: false,
-    userId: "mock-user",
-    version: "1",
-    nodes: [],
-    edges: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
+  const workflow = workflowStore.find((w) => w.id === id);
+  if (!workflow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const structure = structureStore.get(id) ?? { nodes: [], edges: [] };
+  return NextResponse.json({ ...workflow, ...structure });
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  return NextResponse.json({
-    ...body,
-    id,
-    updatedAt: new Date().toISOString(),
-  });
+  const idx = workflowStore.findIndex((w) => w.id === id);
+  if (idx === -1) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  workflowStore[idx] = { ...workflowStore[idx], ...body, id, updatedAt: new Date().toISOString() };
+  return NextResponse.json(workflowStore[idx]);
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  await params;
+  const { id } = await params;
+  const idx = workflowStore.findIndex((w) => w.id === id);
+  if (idx !== -1) {
+    workflowStore.splice(idx, 1);
+    structureStore.delete(id);
+  }
   return NextResponse.json({ success: true });
 }
