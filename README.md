@@ -21,6 +21,32 @@ A standalone **AI Workflow Designer** built with Next.js 16, shadcn/ui, and Verc
 - **Cycle detection** — prevents invalid circular connections
 - **Dark/light theme** — via `next-themes`
 - **Built-in templates** — Agent Chat, Get Weather, Baby Research pre-loaded
+- **Export / Import** — save workflows as `.wflow.json` files and load them back into the system
+
+---
+
+## Export & Import
+
+Export workflows to a file and import them back:
+
+| Action | How |
+|--------|-----|
+| **Export** | Click the download icon on a workflow card, or in the canvas toolbar |
+| **Import** | Click **Import** on the workflow list page → select `.wflow.json` or `.json` file |
+
+**File format** (`.wflow.json`):
+
+```json
+{
+  "version": "1.0",
+  "exportedAt": "2026-03-17T...",
+  "workflow": { "name": "...", "description": "...", "icon": {...}, "visibility": "private" },
+  "nodes": [...],
+  "edges": [...]
+}
+```
+
+Share workflows by exporting the file and importing it on another instance.
 
 ---
 
@@ -199,41 +225,29 @@ Hello {{@INPUT.name}}, your order {{@HTTP.response.body.orderId}} is ready.
 
 ## Execution Flow
 
-```
-User fills INPUT fields in Execute Tab
-        ↓
-allNodeValidate()   — check for missing configs
-        ↓
-POST /api/workflow/:id/execute  { query: { ... } }
-        ↓
-Server:
-  1. Load nodes + edges from store
-  2. topoSort() → determine execution order
-  3. Open ReadableStream
+```mermaid
+flowchart TD
+    subgraph Client["Client"]
+        A[User fills INPUT fields] --> B[allNodeValidate]
+        B --> C["POST /api/workflow/:id/execute"]
+    end
 
-  For each node (in order):
-  ┌─────────────────────────────────────────┐
-  │ emit NODE_START                         │
-  │                                         │
-  │ INPUT    → pass query as output         │
-  │ LLM      → resolve @mentions            │
-  │             → call AI Gateway           │
-  │             → return { answer: ... }    │
-  │ CONDITION→ evaluate conditions          │
-  │             → set branch = "if"/"else"  │
-  │ OUTPUT   → collect upstream values      │
-  │ HTTP     → fetch external API           │
-  │ TEMPLATE → interpolate variables        │
-  │                                         │
-  │ emit NODE_END (isOk: true/false)        │
-  └─────────────────────────────────────────┘
+    C --> D[Load nodes + edges]
+    D --> E[topoSort]
+    E --> F[Open ReadableStream]
 
-  emit WORKFLOW_END  { output, histories }
+    F --> G[For each node in order]
+    G --> H[emit NODE_START]
+    H --> I[Execute: INPUT / LLM / CONDITION / OUTPUT / HTTP / TEMPLATE]
+    I --> J[emit NODE_END]
+    J --> G
+    G -->|done| K[emit WORKFLOW_END]
 
-Client (real-time):
-  NODE_START → node turns blue (spinner)
-  NODE_END   → node turns green ✓ or red ✗
-  WORKFLOW_END → Result tab shows final output
+    subgraph UI["Client UI"]
+        K --> L["NODE_START: blue spinner"]
+        L --> M["NODE_END: green ✓ or red ✗"]
+        M --> N["WORKFLOW_END: Result tab"]
+    end
 ```
 
 ---
