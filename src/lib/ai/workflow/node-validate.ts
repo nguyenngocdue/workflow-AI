@@ -11,6 +11,7 @@ import {
   ToolNodeData,
   HttpNodeData,
   TemplateNodeData,
+  CustomNodeData,
 } from "lib/ai/workflow/workflow.interface";
 import { cleanVariableName } from "lib/utils";
 import { safe } from "ts-safe";
@@ -109,6 +110,13 @@ export const nodeValidate: NodeValidate<WorkflowNodeData> = ({
       return httpNodeValidate({ node, nodes, edges });
     case NodeKind.Template:
       return templateNodeValidate({ node, nodes, edges });
+    case NodeKind.Custom:
+      return customNodeValidate({ node, nodes, edges });
+    case NodeKind.PythonScript:
+    case NodeKind.Note:
+      return;
+    default:
+      return;
   }
 };
 
@@ -169,6 +177,33 @@ export const outputNodeValidate: NodeValidate<OutputNodeData> = ({
 
   if (current?.kind !== NodeKind.Input)
     throw new Error("Prev node must be a Input node");
+};
+
+export const customNodeValidate: NodeValidate<CustomNodeData> = ({
+  node,
+  nodes,
+  edges,
+}) => {
+  const outputData = node.outputData ?? [];
+  const names = outputData.map((d) => d.key);
+  const uniqueNames = [...new Set(names)];
+  if (names.length !== uniqueNames.length) {
+    throw new Error("Custom node output data must have unique keys");
+  }
+  outputData.forEach((data) => {
+    const variableName = cleanVariableName(data.key);
+    if (variableName.length === 0) throw new Error("Invalid variable name");
+    if (variableName.length > 255) throw new Error("Variable name is too long");
+    if (!data.source) throw new Error("Output field must have a source");
+    if (data.source.path.length === 0) throw new Error("Source path required");
+    const sourceNode = nodes.find((n) => n.data.id === data.source?.nodeId);
+    if (!sourceNode) throw new Error("Source node not found");
+    const sourceSchema = findJsonSchemaByPath(
+      sourceNode.data.outputSchema,
+      data.source.path,
+    );
+    if (!sourceSchema) throw new Error("Source schema not found");
+  });
 };
 
 export const llmNodeValidate: NodeValidate<LLMNodeData> = ({ node }) => {

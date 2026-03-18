@@ -14,6 +14,7 @@ import {
   OnEdgesChange,
   applyEdgeChanges,
   addEdge,
+  reconnectEdge,
   OnConnect,
   OnSelectionChangeFunc,
   NodeMouseHandler,
@@ -38,9 +39,11 @@ import useSWR from "swr";
 import { safe } from "ts-safe";
 import { CanvasNodeSearch } from "./canvas-node-search";
 import { createUINode } from "lib/ai/workflow/create-ui-node";
+import { PythonScriptNode } from "./python-script-node";
 
 const nodeTypes = {
   default: DefaultNode,
+  "python-script": PythonScriptNode,
 };
 
 const debounce = createDebounce();
@@ -149,14 +152,16 @@ function WorkflowCanvas({
   );
 
   const handleNodeSearchSelect = useCallback(
-    (kind: NodeKind) => {
+    (kind: NodeKind, customNodeTypeId?: string, customLabel?: string) => {
       if (!searchMenu) return;
+      const baseName = customLabel ?? kind.toUpperCase();
       const names = nodes.map((n) => n.data.name as string);
-      const count = names.filter((n) => n.startsWith(kind.toUpperCase())).length;
-      const name = count > 0 ? `${kind.toUpperCase()}_${count + 1}` : kind.toUpperCase();
+      const count = names.filter((n) => n.startsWith(baseName)).length;
+      const name = count > 0 ? `${baseName}_${count + 1}` : baseName;
       const newNode = createUINode(kind, {
         position: { x: searchMenu.flowX, y: searchMenu.flowY },
         name,
+        customNodeTypeId,
       });
       setNodes((nds) => [...nds, newNode]);
       setSearchMenu(null);
@@ -250,6 +255,27 @@ function WorkflowCanvas({
           eds,
         ),
       );
+    },
+    [editable],
+  );
+
+  /** Drag edge endpoint to another handle to reconnect. Drop on pane (not on a handle) to disconnect and remove the edge. */
+  const onReconnect = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      if (!editable) return;
+      if (newConnection.source === newConnection.target) return;
+      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
+    },
+    [editable],
+  );
+
+  /** When edge endpoint is dropped on pane (not on a handle), connectionState.toNode === null → remove edge. */
+  const onReconnectEnd = useCallback(
+    (_evt: MouseEvent | TouchEvent, edge: Edge, _handleType: "source" | "target", connectionState: { toNode?: unknown }) => {
+      if (!editable) return;
+      if (connectionState.toNode == null) {
+        setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+      }
     },
     [editable],
   );
@@ -375,6 +401,9 @@ function WorkflowCanvas({
         onSelectionChange={onSelectionChange}
         isValidConnection={isValidConnection}
         onConnect={onConnect}
+        onReconnect={onReconnect}
+        onReconnectEnd={onReconnectEnd}
+        edgesReconnectable={editable}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
         onPaneContextMenu={onPaneContextMenu}

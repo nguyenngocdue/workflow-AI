@@ -3,7 +3,8 @@ import { EditWorkflowPopup } from "@/components/workflow/edit-workflow-popup";
 import { authClient } from "auth/client";
 import { canCreateWorkflow } from "lib/auth/client-permissions";
 
-import { ArrowUpRight, ChevronDown, MousePointer2, Upload } from "lucide-react";
+import { ArrowUpRight, ChevronDown, MousePointer2, Upload, Box } from "lucide-react";
+import Link from "next/link";
 
 import { Card, CardDescription, CardHeader, CardTitle } from "ui/card";
 import { Button } from "ui/button";
@@ -276,6 +277,12 @@ export default function WorkflowListPage({
               <Upload className="size-4" />
               {isImporting ? "Importing..." : "Import"}
             </Button>
+            <Link href="/workflow/node-designer">
+              <Button variant="outline">
+                <Box className="size-4" />
+                Node Designer
+              </Button>
+            </Link>
           </>
         )}
 

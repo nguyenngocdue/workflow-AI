@@ -493,7 +493,7 @@ ${workflow!.description ? `tool-description: ${workflow!.description}` : ""}`,
                         id={key || String(i)}
                         value={query[key] ?? ""}
                         className="resize-none max-h-28 overflow-y-auto"
-                        placeholder={schema.description || "Nhập giá trị..."}
+                        placeholder={schema.description || "Enter value..."}
                         onChange={(e) =>
                           setQuery({ [key]: e.target.value })
                         }

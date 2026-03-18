@@ -22,13 +22,15 @@ export function extractNodeDependencySchema({
   if (target.kind === NodeKind.Input) {
     return target.outputSchema;
   }
-  if (target.kind === NodeKind.Output) {
-    const properties = target.outputData.reduce(
-      (acc, cur) => {
+  if (target.kind === NodeKind.PythonScript) {
+    return target.outputSchema;
+  }
+  if (target.kind === NodeKind.Output || target.kind === NodeKind.Custom) {
+    const outputData = (target as any).outputData ?? [];
+    const properties = outputData.reduce(
+      (acc: Record<string, JSONSchema7>, cur: { key: string; source?: { nodeId: string; path: string[] } }) => {
         if (!cur.key) return acc;
-        acc[cur.key] = {
-          type: "string", // default
-        };
+        acc[cur.key] = { type: "string" };
         const source = cur.source;
         if (!source) return acc;
         const sourceNode = nodes.find((node) => node.id === source.nodeId);
@@ -40,7 +42,7 @@ export function extractNodeDependencySchema({
         acc[cur.key] = sourceSchema || { type: "string" };
         return acc;
       },
-      {} as Record<string, JSONSchema7>,
+      {},
     );
     schema.properties = properties;
     return schema;

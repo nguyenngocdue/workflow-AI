@@ -1505,6 +1505,12 @@
   .react-flow__node-default {
     @apply bg-transparent! text-foreground! p-0! border-none! text-sm! text-left! shadow-none!;
   }
+  /* Python Script node: wrapper overflow visible so all handles (IN[0]..IN[n]) are shown */
+  .react-flow__node-python-script,
+  .python-script-node-overflow-visible,
+  .react-flow__node:has([data-python-script-node]) {
+    overflow: visible !important;
+  }
   .react-flow__panel.react-flow__attribution.bottom.right {
     @apply hidden!;
   }

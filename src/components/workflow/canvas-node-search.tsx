@@ -5,12 +5,17 @@ import { createPortal } from "react-dom";
 import { NodeKind } from "lib/ai/workflow/workflow.interface";
 import { NodeIcon } from "./node-icon";
 import { cn } from "lib/utils";
+import useSWR from "swr";
+import { fetcher } from "lib/utils";
+import type { CustomNodeTypeDefinition } from "app-types/custom-node-type";
+import { Box } from "lucide-react";
 
 const NODE_OPTIONS: {
   kind: NodeKind;
   label: string;
   description: string;
   keywords: string[];
+  customNodeTypeId?: string;
 }[] = [
   {
     kind: NodeKind.Input,
@@ -66,11 +71,17 @@ const NODE_OPTIONS: {
     description: "Execute a code block",
     keywords: ["code", "script", "execute", "run", "javascript", "python"],
   },
+  {
+    kind: NodeKind.PythonScript,
+    label: "Python Script",
+    description: "Run Python code (IN[0]..OUT)",
+    keywords: ["python", "script", "cpython", "dynamo"],
+  },
 ];
 
 interface CanvasNodeSearchProps {
   position: { x: number; y: number } | null;
-  onSelect: (kind: NodeKind) => void;
+  onSelect: (kind: NodeKind, customNodeTypeId?: string, customLabel?: string) => void;
   onClose: () => void;
 }
 
@@ -83,14 +94,28 @@ export function CanvasNodeSearch({
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { data: customTypes = [] } = useSWR<CustomNodeTypeDefinition[]>(
+    "/api/custom-node-types",
+    fetcher,
+  );
 
-  const filtered = NODE_OPTIONS.filter((opt) => {
+  const customOptions = customTypes.map((t) => ({
+    kind: NodeKind.Custom as NodeKind,
+    label: t.name ?? "Custom",
+    description: t.description ?? "User-defined node",
+    keywords: [(t.name ?? "").toLowerCase(), "custom", "user"],
+    customNodeTypeId: t.id,
+  }));
+
+  const allOptions = [...NODE_OPTIONS, ...customOptions];
+
+  const filtered = allOptions.filter((opt) => {
     if (!query) return true;
     const q = query.toLowerCase();
     return (
-      opt.label.toLowerCase().includes(q) ||
-      opt.description.toLowerCase().includes(q) ||
-      opt.keywords.some((k) => k.includes(q))
+      (opt.label ?? "").toLowerCase().includes(q) ||
+      (opt.description ?? "").toLowerCase().includes(q) ||
+      (opt.keywords ?? []).some((k) => typeof k === "string" && k.includes(q))
     );
   });
 
@@ -130,8 +155,9 @@ export function CanvasNodeSearch({
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (filtered[activeIndex]) {
-        onSelect(filtered[activeIndex].kind);
+      const opt = filtered[activeIndex];
+      if (opt) {
+        onSelect(opt.kind, opt.customNodeTypeId, opt.label);
       }
     } else if (e.key === "Escape") {
       onClose();
@@ -187,7 +213,7 @@ export function CanvasNodeSearch({
         ) : (
           filtered.map((opt, i) => (
             <button
-              key={opt.kind}
+              key={opt.customNodeTypeId ?? opt.kind}
               className={cn(
                 "w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-left transition-colors",
                 i === activeIndex
@@ -195,9 +221,15 @@ export function CanvasNodeSearch({
                   : "hover:bg-accent/50",
               )}
               onMouseEnter={() => setActiveIndex(i)}
-              onClick={() => onSelect(opt.kind)}
+              onClick={() => onSelect(opt.kind, opt.customNodeTypeId, opt.label)}
             >
-              <NodeIcon type={opt.kind} className="shrink-0" />
+              {opt.kind === NodeKind.Custom ? (
+                <div className="p-1 rounded bg-cyan-500 shrink-0">
+                  <Box className="size-4 text-white" />
+                </div>
+              ) : (
+                <NodeIcon type={opt.kind} className="shrink-0" />
+              )}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium leading-tight">
                   {opt.label}

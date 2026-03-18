@@ -22,7 +22,9 @@ export enum NodeKind {
   Http = "http", // HTTP request node
   Template = "template", // Template processing node
   Code = "code", // Code execution node (future implementation)
+  PythonScript = "python-script", // Execute Python script (Dynamo-style: IN[0]..OUT)
   Output = "output", // Exit point of workflow - produces final result
+  Custom = "custom", // User-defined node (designed in Node Designer)
 }
 
 /**
@@ -189,6 +191,33 @@ export type TemplateNodeData = BaseWorkflowNodeDataData<{
 };
 
 /**
+ * Python Script node: Execute Python code with dynamic inputs (Dynamo-style).
+ * Inputs: IN[0], IN[1], ... (add/remove via +/-). Output: OUT.
+ */
+export type PythonScriptNodeData = BaseWorkflowNodeDataData<{
+  kind: NodeKind.PythonScript;
+}> & {
+  /** Dynamic input ports: { id (handle id), name (e.g. IN[0]) } */
+  inputs: { id: string; name: string }[];
+  /** Python source code. Must assign to OUT to produce result. */
+  code: string;
+};
+
+/**
+ * Custom node: User-defined node type (from Node Designer).
+ * Same semantics as Output — maps upstream outputs to this node's output schema.
+ */
+export type CustomNodeData = BaseWorkflowNodeDataData<{
+  kind: NodeKind.Custom;
+}> & {
+  customNodeTypeId: string;
+  outputData: {
+    key: string;
+    source?: OutputSchemaSourceKey;
+  }[];
+};
+
+/**
  * Union type of all possible node data types.
  * When adding a new node type, include it in this union.
  */
@@ -200,7 +229,9 @@ export type WorkflowNodeData =
   | ToolNodeData
   | ConditionNodeData
   | HttpNodeData
-  | TemplateNodeData;
+  | TemplateNodeData
+  | PythonScriptNodeData
+  | CustomNodeData;
 
 /**
  * Runtime fields added during workflow execution

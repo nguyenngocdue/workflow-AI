@@ -9,6 +9,7 @@ export function createUINode(
     position: { x: number; y: number };
     name?: string;
     id?: string;
+    customNodeTypeId?: string;
   }>,
 ): UINode {
   const id = option?.id ?? generateUUID();
@@ -103,6 +104,16 @@ export function createUINode(
         content: [],
       },
     };
+  } else if (node.data.kind === NodeKind.Custom && option?.customNodeTypeId) {
+    (node.data as any).customNodeTypeId = option.customNodeTypeId;
+    (node.data as any).outputData = [];
+    // outputSchema will be filled by config panel from type definition
+  } else if (node.data.kind === NodeKind.PythonScript) {
+    (node.data as any).inputs = [{ id: generateUUID(), name: "IN[0]" }];
+    (node.data as any).code = "";
+    node.data.outputSchema.properties = { OUT: { type: "object" } };
+    node.type = "python-script";
+    (node as any).className = "python-script-node-overflow-visible";
   }
 
   return node;

@@ -41,6 +41,10 @@ export function NodeIcon({
         return TextIcon;
       case NodeKind.Code:
         return TerminalIcon;
+      case NodeKind.PythonScript:
+        return TerminalIcon;
+      case NodeKind.Custom:
+        return BoxIcon;
       default:
         return BoxIcon;
     }
@@ -59,13 +63,15 @@ export function NodeIcon({
                 ? "bg-indigo-500"
                 : type === NodeKind.Tool
                   ? "bg-blue-500"
-                  : type === NodeKind.Code || type === NodeKind.Http
+                  : type === NodeKind.Code || type === NodeKind.PythonScript || type === NodeKind.Http
                     ? "bg-rose-500"
                     : type === NodeKind.Template
                       ? "bg-purple-500"
                       : type === NodeKind.Condition
                         ? "bg-amber-500"
-                        : "bg-card",
+                        : type === NodeKind.Custom
+                          ? "bg-cyan-500"
+                          : "bg-card",
         "p-1 rounded",
         className,
       )}

@@ -21,9 +21,11 @@ import { nextTick } from "lib/utils";
 import { ToolNodeDataConfig } from "./node-config/tool-node-config";
 import { HttpNodeConfig } from "./node-config/http-node-config";
 import { TemplateNodeConfig } from "./node-config/template-node-config";
+import { CustomNodeDataConfig } from "./node-config/custom-node-config";
+import { PythonScriptConfig } from "./node-config/python-script-config";
 import { useTranslations } from "next-intl";
 
-export function SelectedNodeConfigTab({ node }: { node: UINode }) {
+export function SelectedNodeConfigTab({ node, onClose }: { node: UINode; onClose?: () => void }) {
   const t = useTranslations();
   const { updateNodeData, updateNode, setNodes } = useReactFlow();
 
@@ -58,11 +60,12 @@ export function SelectedNodeConfigTab({ node }: { node: UINode }) {
             <div
               className="p-1 rounded hover:bg-secondary cursor-pointer"
               onClick={() => {
-                setNodes((nodes) => {
-                  return nodes.map((n) =>
+                setNodes((nodes) =>
+                  nodes.map((n) =>
                     n.id === node.id ? { ...n, selected: false } : n,
-                  );
-                });
+                  ),
+                );
+                onClose?.();
               }}
             >
               <XIcon className="size-3.5" />
@@ -99,6 +102,10 @@ export function SelectedNodeConfigTab({ node }: { node: UINode }) {
           <HttpNodeConfig node={node} />
         ) : node.data.kind === NodeKind.Template ? (
           <TemplateNodeConfig data={node.data} />
+        ) : node.data.kind === NodeKind.Custom ? (
+          <CustomNodeDataConfig data={node.data} />
+        ) : node.data.kind === NodeKind.PythonScript ? (
+          <PythonScriptConfig data={node.data} />
         ) : node.data.kind === NodeKind.Note ? (
           <div className="h-full flex flex-col gap-2 px-4">
             <Label
@@ -121,7 +128,7 @@ export function SelectedNodeConfigTab({ node }: { node: UINode }) {
         ) : null}
       </div>
 
-      {![NodeKind.Output, NodeKind.Note].includes(node.data.kind) && (
+      {![NodeKind.Output, NodeKind.Note, NodeKind.Custom].includes(node.data.kind) && (
         <>
           <Separator className="my-6" />
           <div className="px-4 ">

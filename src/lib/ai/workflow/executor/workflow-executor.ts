@@ -4,19 +4,21 @@ import { createStateGraph, graphNode, StateGraphRegistry } from "ts-edge";
 import {
   conditionNodeExecutor,
   outputNodeExecutor,
+  customNodeExecutor,
   llmNodeExecutor,
   NodeExecutor,
   inputNodeExecutor,
   toolNodeExecutor,
   httpNodeExecutor,
   templateNodeExecutor,
+  pythonScriptExecutor,
 } from "./node-executor";
 import { toAny } from "lib/utils";
 import { addEdgeBranchLabel } from "./add-edge-branch-label";
 import { DBEdge, DBNode } from "app-types/workflow";
 import { convertDBNodeToUINode } from "../shared.workflow";
 
-function getExecutorByKind(kind: NodeKind): NodeExecutor {
+export function getExecutorByKind(kind: NodeKind): NodeExecutor {
   switch (kind) {
     case NodeKind.Input:
       return inputNodeExecutor;
@@ -32,6 +34,10 @@ function getExecutorByKind(kind: NodeKind): NodeExecutor {
       return httpNodeExecutor;
     case NodeKind.Template:
       return templateNodeExecutor;
+    case NodeKind.PythonScript:
+      return pythonScriptExecutor;
+    case NodeKind.Custom:
+      return customNodeExecutor;
     case "NOOP" as any:
       return () => ({ input: {}, output: {} });
   }

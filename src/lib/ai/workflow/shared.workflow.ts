@@ -136,6 +136,9 @@ export function convertDBNodeToUINode(node: DBNode): UINode {
       kind: node.kind as any,
     },
   };
+  if (type === "python-script") {
+    (uiNode as any).className = "python-script-node-overflow-visible";
+  }
   return uiNode;
 }
 

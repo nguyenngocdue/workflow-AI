@@ -32,16 +32,25 @@ export const OutputNodeDataConfig = memo(function ({
     const nodes = getNodes() as UINode[];
     return data.outputData.map(({ key, source }) => {
       const targetNode = nodes.find((node) => node.data.id === source?.nodeId);
+      const path = source?.path ?? [];
       const schema = targetNode
-        ? findJsonSchemaByPath(targetNode.data.outputSchema, source?.path ?? [])
+        ? findJsonSchemaByPath(targetNode.data.outputSchema, path)
         : undefined;
+      const isPythonOut = targetNode?.data.kind === "python-script" && path[0] === "OUT";
+      const outSubPath = isPythonOut && path.length > 1 ? path.slice(1).join(".") : "";
+      const isNotFound =
+        (source && !targetNode) ||
+        (targetNode && !isPythonOut && !schema) ||
+        (targetNode && isPythonOut && path.length === 0);
       return {
         key,
         schema,
-        path: source?.path ?? [],
+        path,
         nodeName: targetNode?.data.name,
         nodeId: targetNode?.data.id,
-        isNotFound: (source && !targetNode) || (targetNode && !schema),
+        isNotFound,
+        isPythonOut,
+        outSubPath,
       };
     });
   }, [data]);
@@ -53,25 +62,22 @@ export const OutputNodeDataConfig = memo(function ({
     ) => {
       updateNodeData(data.id, (node) => {
         const prev = node.data as OutputNodeData;
-        return {
-          outputData: prev.outputData.map((v, i) =>
-            i === index ? { ...v, ...item } : v,
-          ),
-        };
+        const nextOutputData = prev.outputData.map((v, i) =>
+          i === index ? { ...v, ...item } : v,
+        );
+        return { ...prev, outputData: nextOutputData };
       });
     },
-    [data.id],
+    [data.id, updateNodeData],
   );
   const deleteOutputVariable = useCallback(
     (index: number) => {
       updateNodeData(data.id, (node) => {
         const prev = node.data as OutputNodeData;
-        return {
-          outputData: prev.outputData.filter((_, i) => i !== index),
-        };
+        return { ...prev, outputData: prev.outputData.filter((_, i) => i !== index) };
       });
     },
-    [data.id],
+    [data.id, updateNodeData],
   );
 
   const addOutputVariable = useCallback(
@@ -82,12 +88,10 @@ export const OutputNodeDataConfig = memo(function ({
           key,
           prev.outputData.map((v) => v.key),
         );
-        return {
-          outputData: [...prev.outputData, { key: newKey, source: undefined }],
-        };
+        return { ...prev, outputData: [...prev.outputData, { key: newKey, source: undefined }] };
       });
     },
-    [data.id],
+    [data.id, updateNodeData],
   );
 
   return (
@@ -138,6 +142,23 @@ export const OutputNodeDataConfig = memo(function ({
                   <ChevronDownIcon className="size-3 ml-auto" />
                 </div>
               </VariableSelect>
+              {item.isPythonOut && (data.outputData[index]?.source?.nodeId != null) && (
+                <Input
+                  className="w-20 text-xs h-8"
+                  placeholder="x, y..."
+                  value={item.outSubPath}
+                  onChange={(e) => {
+                    const sub = e.target.value.trim().replace(/\s+/g, ".");
+                    const path = sub ? ["OUT", ...sub.split(".").filter(Boolean)] : ["OUT"];
+                    const nodeId = data.outputData[index]?.source?.nodeId;
+                    if (nodeId == null) return;
+                    updateOutputVariable(index, {
+                      source: { nodeId, path },
+                    });
+                  }}
+                  title="OUT sub-key (e.g. x, y, result). Leave empty for full OUT."
+                />
+              )}
               <Button
                 variant="ghost"
                 size="icon"

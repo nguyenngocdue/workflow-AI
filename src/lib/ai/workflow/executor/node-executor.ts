@@ -8,8 +8,11 @@ import {
   ToolNodeData,
   HttpNodeData,
   TemplateNodeData,
+  CustomNodeData,
+  PythonScriptNodeData,
   OutputSchemaSourceKey,
 } from "../workflow.interface";
+import { runPythonScript } from "lib/run-python";
 import { WorkflowRuntimeState } from "./graph-store";
 import {
   convertToModelMessages,
@@ -52,6 +55,18 @@ export const outputNodeExecutor: NodeExecutor<OutputNodeData> = ({
   return {
     output: node.outputData.reduce((acc, cur) => {
       acc[cur.key] = state.getOutput(cur.source!);
+      return acc;
+    }, {} as object),
+  };
+};
+
+export const customNodeExecutor: NodeExecutor<CustomNodeData> = ({
+  node,
+  state,
+}) => {
+  return {
+    output: (node.outputData ?? []).reduce((acc, cur) => {
+      if (cur.source) acc[cur.key] = state.getOutput(cur.source);
       return acc;
     }, {} as object),
   };
@@ -318,4 +333,28 @@ export const templateNodeExecutor: NodeExecutor<TemplateNodeData> = ({
     });
   }
   return { output: { template: text } };
+};
+
+export const pythonScriptExecutor: NodeExecutor<PythonScriptNodeData> = async ({
+  node,
+  state,
+}) => {
+  const inputs = node.inputs ?? [{ id: "in0", name: "IN[0]" }];
+  const rawValues = inputs.map((input) => {
+    const edge = state.edges.find(
+      (e) =>
+        e.target === node.id &&
+        (e.uiConfig?.targetHandle === input.id || e.uiConfig?.targetHandle === input.name),
+    );
+    if (!edge) return undefined;
+    return state.getOutput({ nodeId: edge.source, path: [] });
+  });
+  const fallback = rawValues.find((v) => v !== undefined);
+  const inputValues = rawValues.map((v) => (v !== undefined ? v : fallback));
+  const code = node.code ?? "";
+  if (!code.trim()) {
+    return { output: { OUT: undefined } };
+  }
+  const OUT = await runPythonScript(code, inputValues);
+  return { output: { OUT } };
 };
