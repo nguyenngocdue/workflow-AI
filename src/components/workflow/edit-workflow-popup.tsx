@@ -58,8 +58,8 @@ const zodSchema = z.object({
   id: z.string().optional(),
   name: z
     .string()
-    .min(1)
-    .regex(/^[a-zA-Z -]+$/),
+    .trim()
+    .min(1),
   description: z.string().max(200).optional(),
   icon: z.object({
     type: z.enum(["emoji"]),
